@@ -1,6 +1,8 @@
 package udpserver
 
 import (
+	"hug/udpserver/udp_parser"
+	"hug/udpserver/udp_repacker"
 	"net"
 )
 
@@ -9,13 +11,9 @@ const (
 )
 
 var (
-	conn *net.UDPConn
+	Conn *net.UDPConn
 	rp   *IUDPRepacker
 )
-
-type IUDPRepacker interface {
-	Repack(addr *net.UDPAddr, data []byte)
-}
 
 func Start() {
 	log.Println("Starting udp server...")
@@ -43,7 +41,7 @@ func startListenUdpPort() {
 	defer socket.Close()
 
 	conn = socket
-	parser := UDPParser.New()
+	parser := udp_parser.New()
 	rp = UDPRepacker.New(parser)
 
 	for {

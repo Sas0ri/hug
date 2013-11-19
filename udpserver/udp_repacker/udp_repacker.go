@@ -1,13 +1,14 @@
-package udpserver
+package udp_repacker
 
 import (
 	"hug/imserver/connections"
+	"hug/udpserver/udp_parser"
 	"hug/utils/beemap"
 	"net"
 )
 
-type IUDPParser interface {
-	Parse(addr *net.UDPAddr, data []byte)
+type IUDPRepacker interface {
+	Repack(addr *net.UDPAddr, data []byte)
 }
 
 type UDPRepacker struct {
@@ -18,8 +19,8 @@ type UDPRepacker struct {
 
 func New(parser *IUDPParser) *UDPRepacker {
 	rp := &UDPRepacker{
-		connMap: beemap.NewBeeMap(),
-		parser:  parser,
+		connMap: &beemap.NewBeeMap(),
+		parser:  &parser,
 	}
 	return rp
 }
