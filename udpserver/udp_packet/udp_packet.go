@@ -2,7 +2,7 @@ package udp_packet
 
 import (
 	"encoding/json"
-	// "hug/imserver/cmdhandler"
+	"hug/imserver/cmdhandler"
 	"hug/imserver/connections"
 	"hug/logs"
 	"hug/utils/beemap"
@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-var session *beemap
+var session *beemap.BeeMap
 
 const (
 	Type_Request uint8 = iota
@@ -69,15 +69,16 @@ type FileTransferStartNATRequestPkt struct {
 }
 
 const (
-	FileTransferStartWanNatCode_None uint8 = iota
+	FileTransferStartWanNatCode_None int8 = iota
 	FileTransferStartWanNatCode_Offline
 )
 
 func handlePacket(pkt *UDPStreamPacket) {
 	var p1 FileTransferLinkServerPkt
 	json.Unmarshal(pkt.JsonData, &p1)
-	var p2 FileTransferLinkServerPkt = session.Get(p1.SessionId)
-	if p2 == nil {
+
+	exist := session.Check(p1.SessionId)
+	if !exist {
 		session.Set(p1.SessionId, p1)
 		go func() {
 			select {
@@ -87,13 +88,15 @@ func handlePacket(pkt *UDPStreamPacket) {
 			}
 		}()
 	} else {
+		p2, _ := session.Get(p1.SessionId).(FileTransferLinkServerPkt)
+
 		offline := true
-		var conn1 *net.Conn
-		var conn2 *net.Conn
+		var conn1 *connections.ClientConnection
+		var conn2 *connections.ClientConnection
 		presence := connections.FindPresences(p1.Uid)
 		for terminal, conn := range presence.Terminals {
 			if terminal == p1.FromTerminal {
-				online = false
+				offline = false
 				conn1 = conn
 				break
 			}
@@ -101,7 +104,7 @@ func handlePacket(pkt *UDPStreamPacket) {
 		presence = connections.FindPresences(p2.Uid)
 		for terminal, conn := range presence.Terminals {
 			if terminal == p1.FromTerminal {
-				online = false
+				offline = false
 				conn2 = conn
 				break
 			}
@@ -110,19 +113,23 @@ func handlePacket(pkt *UDPStreamPacket) {
 			var reqPkt FileTransferStartNATRequestPkt
 			reqPkt.Code = FileTransferStartWanNatCode_Offline
 			reqPkt.SessionId = p1.SessionId
-			resData := json.Marshal(reqPkt)
+			resData, err := json.Marshal(reqPkt)
+			if err != nil {
+				logs.Logger.Critical("json unmarshal err", err)
+				return
+			}
 			if conn1 != nil {
-				conn1.WritePacket(Cmd_FileTransferStartWanNat, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), resData)
+				conn1.WritePacket(cmdhandler.Cmd_FileTransferStartWanNat, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), resData)
 			}
 			if conn2 != nil {
-				conn2.WritePacket(Cmd_FileTransferStartWanNat, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), resData)
+				conn2.WritePacket(cmdhandler.Cmd_FileTransferStartWanNat, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), resData)
 			}
 			return
 		}
 		var reqPkt1 FileTransferStartNATRequestPkt
-		reqPk1.SessionId = p1.SessionId
+		reqPkt1.SessionId = p1.SessionId
 		reqPkt1.Ip = p2.Ip.String()
-		resDat1, err := json.Marshal(reqPkt1)
+		resData1, err := json.Marshal(reqPkt1)
 		if err != nil {
 			logs.Logger.Critical("json unmarshal err", err)
 			return
@@ -135,7 +142,7 @@ func handlePacket(pkt *UDPStreamPacket) {
 			logs.Logger.Critical("json unmarshal err", err)
 			return
 		}
-		conn1.WritePacket(Cmd_FileTransferStartWanNat, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), resData1)
-		conn2.WritePacket(Cmd_FileTransferStartWanNat, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), resData2)
+		conn1.WritePacket(cmdhandler.Cmd_FileTransferStartWanNat, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), resData1)
+		conn2.WritePacket(cmdhandler.Cmd_FileTransferStartWanNat, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), resData2)
 	}
 }

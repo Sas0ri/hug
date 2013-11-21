@@ -1,7 +1,7 @@
 package udpserver
 
 import (
-	"hug/udpserver/udp_parser"
+	"hug/logs"
 	"hug/udpserver/udp_repacker"
 	"net"
 )
@@ -12,14 +12,12 @@ const (
 
 var (
 	Conn *net.UDPConn
-	rp   *IUDPRepacker
+	rp   *udp_repacker.UDPRepacker
 )
 
 func Start() {
-	log.Println("Starting udp server...")
 	logs.Logger.Info("Starting udp server...")
 	go startListenUdpPort()
-	log.Println("Starting udp server successful.")
 	logs.Logger.Info("Starting udp server successful.")
 }
 
@@ -33,21 +31,20 @@ func startListenUdpPort() {
 		Port: UdpPort,
 	})
 	if err != nil {
-		logs.Logger.info("Listen UDP failed:", err)
+		logs.Logger.Info("Listen UDP failed:", err)
 		return
 	}
 	defer socket.Close()
 
-	conn = socket
-	parser := udp_parser.New()
-	rp = UDPRepacker.New(parser)
+	Conn = socket
+	rp = udp_repacker.New()
 
 	for {
 		// 读取数据
 		data := make([]byte, 4096)
 		len, remoteAddr, err := socket.ReadFromUDP(data)
 		if err != nil {
-			log.Logger.info("read udp failed!", err)
+			logs.Logger.Info("read udp failed!", err)
 			continue
 		}
 		go rp.Repack(remoteAddr, data[:len])

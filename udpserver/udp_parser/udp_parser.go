@@ -15,10 +15,6 @@ const (
 	Cmd_Ack
 )
 
-type UDPParser struct {
-	IUDPParser
-}
-
 type UDPPacket struct {
 	D        uint32
 	Cmd      uint8
@@ -29,14 +25,13 @@ type UDPPacket struct {
 
 var Conn *net.UDPConn
 
-func New(conn *net.UDPConn) *UDPParser {
-	up := &UDPParser{}
+func Init(conn *net.UDPConn) {
 	Conn = conn
 	udp_packet.Init()
-	return up
+	return
 }
 
-func (up *UDPParser) Parse(addr *net.UDPAddr, data []byte) {
+func Parse(addr *net.UDPAddr, data []byte) {
 	length := len(data)
 	if length < 13 {
 		return
@@ -53,7 +48,7 @@ func (up *UDPParser) Parse(addr *net.UDPAddr, data []byte) {
 		return
 	}
 	go udp_packet.Parse(addr, data)
-	resPkt := &UDPPacket{D: pkt.D, NextD: pkt.NextD, Cmd: Cmd_Ack, Length: 0}
+	resPkt := &UDPPacket{D: pkt.D, Cmd: Cmd_Ack, Length: 0}
 	writePacket(addr, resPkt)
 }
 
@@ -91,7 +86,7 @@ func writePacket(addr *net.UDPAddr, pkt *UDPPacket) {
 	data = append(data, byte(checkSum>>16))
 	data = append(data, byte(checkSum>>8))
 	data = append(data, byte(checkSum))
-	writeUDP(addr, data)
+	WriteUDP(addr, data)
 }
 
 func WriteUDP(addr *net.UDPAddr, data []byte) {
