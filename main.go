@@ -4,6 +4,7 @@ import (
 	"hug/core"
 	"hug/imserver"
 	"hug/logs"
+	"hug/udpserver"
 	"hug/webserver"
 	"log"
 	"runtime"
@@ -25,4 +26,6 @@ func main() {
 	imserver.Start()
 	defer imserver.Stop()
 
+	udpserver.Start()
+	defer udpserver.Stop()
 }

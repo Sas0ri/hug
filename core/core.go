@@ -4,6 +4,7 @@ import (
 	"hug/config"
 	"hug/core/corps"
 	"hug/core/devices"
+	"hug/core/files"
 	"hug/core/groups"
 	"hug/core/messages"
 	"hug/core/rosters"
@@ -48,6 +49,9 @@ func Start() {
 	if devices.ConnDB(cfg) != nil {
 		os.Exit(7)
 	}
+	if files.ConnDB(cfg) != nil {
+		os.Exit(8)
+	}
 	log.Println("Starting core successful.")
 	logs.Logger.Info("Starting core successful.")
 
@@ -59,4 +63,5 @@ func Stop() {
 	messages.CloseDB()
 	groups.CloseDB()
 	devices.CloseDB()
+	files.CloseDB()
 }

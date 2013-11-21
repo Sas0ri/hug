@@ -86,18 +86,10 @@ const (
 
 const (
 	Cmd_FileTransferRequest uint8 = 0xA0 + iota
-	Cmd_ChangeToOfflineFileTransfer
-	Cmd_OffLineFileTransferSended
-	Cmd_HandleOfflineFileTransfer
 	Cmd_HandleDirectFileTransferRequest
-	Cmd_FileTransferDirectLocalConnectFailed
-	Cmd_FileTransferShakeHands
-	Cmd_FileTransferRegistNat
-	Cmd_FileTransferStartNat
-	Cmd_FileTransferStartSend
-	Cmd_FileTransferSending
-	Cmd_FileTransferSendDone
-	Cmd_FileTransferProxyTransfer
+	Cmd_FileTransferStartLanNat
+	Cmd_FileTransferLocalNATFailed
+	Cmd_FileTransferStartWanNat
 )
 
 type IHandler interface {
@@ -133,6 +125,7 @@ func NewCmdHanglers() (cmdHandlers *CmdHandlers) {
 	NewMsgPushHandlers(cmdHandlers)
 	NewRosterHandlers(cmdHandlers)
 	NewRosterRequestHandlers(cmdHandlers)
+	NewFileTransferHandlers(cmdHandlers)
 
 	go cmdHandlers.handleLoop()
 	return

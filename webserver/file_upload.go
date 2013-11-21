@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hug/config"
+	"hug/core/files"
 	"hug/core/users"
 	"hug/logs"
 	"hug/utils"
@@ -46,16 +47,19 @@ const (
 	FileUploadImgPath          = "/upload/img/"
 	FileUploadAvatarPath       = "/upload/avatar/"
 	FileUploadVoicePath        = "/upload/voice/"
+	FileUploadFilePath         = "/upload/offlinefile/"
 	FilePort                   = ":9091"
 	FileGetImgPath             = "/img/"
 	FileGetAvatarPath          = "/avatar/"
 	FileGetVoicePath           = "/voice/"
+	FileGetFilePath            = "/offlinefile/"
 	chatImageThumbnailSavePath = "thumbnail"
 )
 
 var avatarSavePath string
 var voiceSavePath string
 var chatImageSavePath string
+var offlineFileSavePath string
 
 func initFileUpload() {
 	var webserviceConfigFilename string
@@ -127,6 +131,23 @@ func initFileUpload() {
 		return
 	}
 
+	offlineFileSavePath, err = cfg.GetString("offline_file_save_path")
+	if err != nil {
+		logs.Logger.Critical("Load offline file save path failed: ", err)
+		os.Exit(100)
+		return
+	}
+	exist, err = isPathExists(offlineFileSavePath)
+	if err != nil {
+		logs.Logger.Critical("check if path ", offlineFileSavePath, " exist error: ", err)
+		os.Exit(100)
+		return
+	}
+	if !exist {
+		logs.Logger.Critical("path ", offlineFileSavePath, " not exist")
+		os.Exit(100)
+		return
+	}
 	// chatImageThumbnailSavePath = chatImageSavePath + "/thumbnail"
 	// exist, err = isPathExists(chatImageThumbnailSavePath)
 	// if err != nil {
@@ -146,12 +167,12 @@ func initFileUpload() {
 	http.HandleFunc(FileUploadImgPath, handleImgUpload)
 	http.HandleFunc(FileUploadAvatarPath, handleAvatarUpload)
 	http.HandleFunc(FileUploadVoicePath, handleVoiceUpload)
-
+	http.HandleFunc(FileUploadFilePath, handleOfflineFileUpload)
 	http.Handle(FileGetImgPath, http.StripPrefix(FileGetImgPath, http.FileServer(http.Dir(chatImageSavePath))))
 	// http.Handle(FileGetThumbnailImgPath, http.StripPrefix(FileGetThumbnailImgPath, http.FileServer(http.Dir(chatImageThumbnailSavePath))))
 	http.Handle(FileGetAvatarPath, http.StripPrefix(FileGetAvatarPath, http.FileServer(http.Dir(avatarSavePath))))
 	http.Handle(FileGetVoicePath, http.StripPrefix(FileGetVoicePath, http.FileServer(http.Dir(voiceSavePath))))
-
+	http.Handle(FileGetFilePath, http.StripPrefix(FileGetFilePath, http.FileServer(http.Dir(offlineFileSavePath))))
 	logs.Logger.Info("init file upload web server successful.")
 	//progressStore = make(map[string]float32)
 }
@@ -449,6 +470,79 @@ func handleVoiceUpload(w http.ResponseWriter, req *http.Request) {
 		logs.Logger.Info("handleVoiceUpload successful:", fullPath)
 		resPkt.Code = FileUploadCode_None
 		resPkt.Path = retPath
+	}
+}
+
+func handleOfflineFileUpload(rw http.ResponseWriter, req *http.Request) {
+	var resPkt FileUploadResPkt
+	resPkt.Code = FileUploadCode_Failed
+	defer func() {
+		resData, err := json.Marshal(resPkt)
+		if err != nil {
+			logs.Logger.Critical("handleAvatarUpload json marshal respacket error:", err)
+		}
+		fmt.Fprint(rw, string(resData))
+	}()
+	if req.Method == "POST" {
+		req.ParseForm()
+		logs.Logger.Info("New upload voice request filename =", req.FormValue("filename"))
+
+		filename := req.FormValue("filename")
+		if len(filename) == 0 {
+			logs.Logger.Warn("handleVoiceUpload error: invalid filename", filename)
+			return
+		}
+
+		uid := req.FormValue("uid")
+		token := req.FormValue("token")
+		uidInt, err := strconv.ParseInt(uid, 10, 64)
+		fmt.Printf("%d", uidInt)
+		if uidInt == 0 || err != nil || len(token) == 0 {
+			logs.Logger.Critical("upload offline file parse uid error:", err)
+			return
+		}
+
+		h := md5.New()
+		io.WriteString(h, uid)
+		io.WriteString(h, uidEncryptSalt1)
+		io.WriteString(h, uidEncryptSalt2)
+		token2 := fmt.Sprintf("%x", h.Sum(nil))
+		if token != token2 {
+			fmt.Println(token2)
+			resPkt.Code = FileUploadCode_PermissionDenied
+			return
+		}
+
+		isExist, _ := files.IsFileExists(filename)
+		if isExist {
+			resPkt.Path = files.GetFilePath(filename)
+			resPkt.Code = FileUploadCode_None
+			files.UpdateFileStamp(filename)
+			return
+		}
+		fileSavePath := offlineFileSavePath
+		retPath := makeDir(fileSavePath)
+		fullPath := filepath.Join(fileSavePath, retPath, filename)
+		if len(retPath) == 0 {
+			resPkt.Path = ""
+			resPkt.Code = FileUploadCode_Failed
+			return
+		}
+
+		tmpFile, _ := ioutil.TempFile(os.TempDir(), "upload-tmp-")
+		body, err := ioutil.ReadAll(req.Body)
+		if err != nil {
+			logs.Logger.Critical("handleVoiceUpload read post data err:", err)
+			return
+		}
+		tmpFile.Write(body)
+		tmpFile.Close()
+		os.Remove(fullPath)
+		os.Rename(tmpFile.Name(), fullPath)
+		logs.Logger.Info("handleVoiceUpload successful:", fullPath)
+		resPkt.Code = FileUploadCode_None
+		resPkt.Path = retPath
+		files.CreateFile(uidInt, filename, filepath.Join(retPath))
 	}
 }
 

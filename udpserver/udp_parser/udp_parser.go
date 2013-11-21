@@ -1,7 +1,7 @@
 package udp_parser
 
 import (
-	"crypto/md5"
+	"hash/crc32"
 	"hug/udpserver/udp_packet"
 	"net"
 )
@@ -21,7 +21,6 @@ type UDPParser struct {
 
 type UDPPacket struct {
 	D        uint32
-	NextD    uint32
 	Cmd      uint8
 	Length   uint32
 	Data     []byte
@@ -45,10 +44,12 @@ func (up *UDPParser) Parse(addr *net.UDPAddr, data []byte) {
 	pkt := readPacket(data)
 	realData := data[:len(data)-4]
 
-	h := md5.New()
-	h.Write(realData)
-	checkSumData := h.Sum(nil)
-	if checkSumData[0] != pkt.CheckSum[0] || checkSumData[1] != pkt.CheckSum[1] || checkSumData[2] != pkt.CheckSum[2] || checkSumData[3] != pkt.CheckSum[3] {
+	checkSum := crc32.ChecksumIEEE(realData)
+	pktCheckSum := (uint32)(pkt.CheckSum[0] << 24)
+	pktCheckSum += (uint32)(pkt.CheckSum[0] << 16)
+	pktCheckSum += (uint32)(pkt.CheckSum[0] << 8)
+	pktCheckSum += (uint32)(pkt.CheckSum[0])
+	if checkSum != pktCheckSum {
 		return
 	}
 	go udp_packet.Parse(addr, data)
@@ -78,10 +79,6 @@ func writePacket(addr *net.UDPAddr, pkt *UDPPacket) {
 	data = append(data, byte(pkt.D>>16))
 	data = append(data, byte(pkt.D>>8))
 	data = append(data, byte(pkt.D))
-	data = append(data, byte(pkt.NextD>>24))
-	data = append(data, byte(pkt.NextD>>16))
-	data = append(data, byte(pkt.NextD>>8))
-	data = append(data, byte(pkt.NextD))
 	data = append(data, byte(pkt.Cmd))
 	data = append(data, byte(pkt.Length>>24))
 	data = append(data, byte(pkt.Length>>16))
@@ -89,10 +86,11 @@ func writePacket(addr *net.UDPAddr, pkt *UDPPacket) {
 	data = append(data, byte(pkt.Length))
 	data = append(data, pkt.Data...)
 
-	h := md5.New()
-	h.Write(data)
-	checkSum := h.Sum(nil)
-	data = append(data, checkSum...)
+	checkSum := crc32.ChecksumIEEE(data)
+	data = append(data, byte(checkSum>>24))
+	data = append(data, byte(checkSum>>16))
+	data = append(data, byte(checkSum>>8))
+	data = append(data, byte(checkSum))
 	writeUDP(addr, data)
 }
 

@@ -18,11 +18,9 @@ var (
 func Start() {
 	log.Println("Starting udp server...")
 	logs.Logger.Info("Starting udp server...")
-	go startListenUserPort()
+	go startListenUdpPort()
 	log.Println("Starting udp server successful.")
 	logs.Logger.Info("Starting udp server successful.")
-
-	go startListenUdpPort()
 }
 
 func Stop() {

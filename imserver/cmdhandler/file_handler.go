@@ -1,9 +1,12 @@
 package cmdhandler
 
 import (
+	"crypto/md5"
 	"encoding/json"
+	"fmt"
 	"hug/imserver/connections"
 	"hug/logs"
+	"io"
 	"math/rand"
 )
 
@@ -24,21 +27,24 @@ func NewFileTransferHandlers(cmdHandlers *CmdHandlers) {
 	handleFileTransferRequestHandler := &HandleFileTransferRequestHandler{}
 	handleFileTransferRequestHandler.initHandler(cmdHandlers)
 
-	fileTransferStartNATHandler := &FileTransferStartNATHandler{}
-	fileTransferStartNATHandler.initHandler(cmdHandlers)
+	fileTransferStartLanNATHandler := &FileTransferStartLanNATHandler{}
+	fileTransferStartLanNATHandler.initHandler(cmdHandlers)
 
 	fileTransferLocalNATFailedHandler := &FileTransferLocalNATFailedHandler{}
 	fileTransferLocalNATFailedHandler.initHandler(cmdHandlers)
 }
 
 type FileTransferRequestPkt struct {
-	From     int64  `json:"fr"`
-	To       int64  `json:""to`
-	Ip       string `json:"ip"`
-	Fid      string `json:"fid"`
-	Path     string `json:"p"`
-	FileName string `json:"fn"`
-	FileSize int64  `json:"fs"`
+	From         int64  `json:"fr,omitempty"`
+	To           int64  `json:"to,omitempty"`
+	Ip           string `json:"ip,omitempty"`
+	Fid          string `json:"fid,omitempty"`
+	Path         string `json:"p,omitempty"`
+	FileName     string `json:"fn,omitempty"`
+	FileSize     int64  `json:"fs,omitempty"`
+	FromTerminal int16  `json:"ft,omitempty"`
+	ToTerminal   int16  `json:"tt,omitempty"`
+	SessionId    string `json:"sid,omitempty"`
 }
 
 type FileTransferResPkt struct {
@@ -74,12 +80,19 @@ func (h *FileTransferRequestHandler) packetIn(pkt connections.Packet) {
 		logs.Logger.Warn("json unmarshal error:", err, " user:", pkt.Conn.AuthInfo.Account, " addr:", pkt.Conn.RemoteAddr(), "reqpkt :", string(pkt.Data))
 		return
 	}
+
+	m := md5.New()
+	io.WriteString(m, reqPkt.Fid)
+	io.WriteString(m, reqPkt.Path)
+	reqPkt.SessionId = fmt.Sprintf("%x", m.Sum(nil))
+	reqPkt.FromTerminal = pkt.Conn.AuthInfo.TerminalType
+	reqData, err := json.Marshal(reqPkt)
 	toPresence := connections.FindPresences(reqPkt.To)
 	online := toPresence != nil
 	if online {
 		for _, conn := range toPresence.Terminals {
 			online = true
-			conn.WritePacket(Cmd_FileTransferRequest, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), pkt.Data)
+			conn.WritePacket(Cmd_FileTransferRequest, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), reqData)
 
 		}
 	}
@@ -91,8 +104,13 @@ func (h *FileTransferRequestHandler) packetIn(pkt connections.Packet) {
 }
 
 type HandleFileTransferRequestPkt struct {
-	FileTransferRequestPkt
-	HandleType uint8 `json:"t"`
+	From         int64  `json:"fr,omitempty"`
+	To           int64  `json:"to,omitempty"`
+	Ip           string `json:"ip,omitempty"`
+	SessionId    string `json:"sid,omitempty"`
+	FromTerminal int16  `json:"ft,omitempty"`
+	ToTerminal   int16  `json:"tt,omitempty"`
+	HandleType   int8   `json:"t,omitempty"`
 }
 
 type HandleFileTransferRequestHandler struct {
@@ -124,41 +142,54 @@ func (h *HandleFileTransferRequestHandler) packetIn(pkt connections.Packet) {
 		logs.Logger.Warn("json unmarshal error:", err, " user:", pkt.Conn.AuthInfo.Account, " addr:", pkt.Conn.RemoteAddr(), "reqpkt :", string(pkt.Data))
 		return
 	}
+	reqPkt.ToTerminal = pkt.Conn.AuthInfo.TerminalType
+	reqData, err := json.Marshal(reqPkt)
 	toPresence := connections.FindPresences(reqPkt.From)
 	online := toPresence != nil
-	for _, conn := range toPresence.Terminals {
-		conn.WritePacket(Cmd_FileTransferRequest, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), pkt.Data)
+	for terminalType, conn := range toPresence.Terminals {
+		if terminalType == reqPkt.FromTerminal {
+			online = true
+			conn.WritePacket(Cmd_FileTransferRequest, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), reqData)
+		}
 	}
 	if !online {
 		logs.Logger.Infof("PC User %lld is not online", reqPkt.To)
 		resPkt.Code = FileTransferCode_Offline
 	}
+	//给自己的其他在线客户端发送处理消息
+	fromPresence := connections.FindPresences(reqPkt.To)
+	for terminalType, conn := range fromPresence.Terminals {
+		if terminalType != reqPkt.ToTerminal {
+			conn.WritePacket(Cmd_FileTransferRequest, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), reqData)
+		}
+	}
 	return
 }
 
-type FileTransferStartNATRequestPkt struct {
-	From int64  `json:"fr"`
-	To   int64  `json:"to"`
-	Fid  string `json:"fid"`
-	Path string `json:"p"`
-	Ip   string `json:"ip" omitempty`
+type FileTransferStartLanNATReqPkt struct {
+	From         int64  `json:"fr"`
+	To           int64  `json:"to"`
+	FromTerminal int16  `json:"ft,omitempty"`
+	ToTerminal   int16  `json:"tt,omitempty"`
+	SessionId    string `json:"sid,omitempty"`
 }
 
-type FileTransferStartNATResPkt struct {
-	Code int8 `json:"code"`
+type FileTransferStartLanNATResPkt struct {
+	SessionId string `json:"sid,omitempty"`
+	Code      int8   `json:"code"`
 }
 
-type FileTransferStartNATHandler struct {
+type FileTransferStartLanNATHandler struct {
 	CmdHandler
 }
 
-func (h *FileTransferStartNATHandler) initHandler(CmdHandlers *CmdHandlers) {
-	h.Cmd = Cmd_FileTransferStartNat
-	CmdHandlers.handlers[h.Cmd] = h
+func (h *FileTransferStartLanNATHandler) initHandler(cmdHandlers *CmdHandlers) {
+	h.Cmd = Cmd_FileTransferStartLanNat
+	cmdHandlers.handlers[Cmd_FileTransferStartLanNat] = h
 }
 
-func (h *FileTransferStartNATHandler) packetIn(pkt connections.Packet) {
-	var resPkt FileTransferStartNATResPkt
+func (h *FileTransferStartLanNATHandler) packetIn(pkt connections.Packet) {
+	var resPkt FileTransferStartLanNATResPkt
 	resPkt.Code = FileTransferCode_None
 	defer func() {
 		resData, err := json.Marshal(resPkt)
@@ -171,45 +202,52 @@ func (h *FileTransferStartNATHandler) packetIn(pkt connections.Packet) {
 			return
 		}
 	}()
-	var reqPkt FileTransferStartNATRequestPkt
+	var reqPkt FileTransferStartLanNATReqPkt
 	err := json.Unmarshal(pkt.Data, &reqPkt)
 	if err != nil {
 		logs.Logger.Warn("json unmarshal error:", err, " user:", pkt.Conn.AuthInfo.Account, " addr:", pkt.Conn.RemoteAddr(), "reqpkt :", string(pkt.Data))
 		return
 	}
+	resPkt.SessionId = reqPkt.SessionId
+
 	toPresence := connections.FindPresences(reqPkt.To)
 	online := toPresence != nil
-	for _, conn := range toPresence.Terminals {
-		conn.WritePacket(Cmd_FileTransferRequest, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), pkt.Data)
+	for terminalType, conn := range toPresence.Terminals {
+		if terminalType == reqPkt.ToTerminal {
+			online = true
+			conn.WritePacket(Cmd_FileTransferRequest, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), pkt.Data)
+		}
 	}
 	if !online {
+		logs.Logger.Infof("PC User %lld is not online", reqPkt.To)
 		resPkt.Code = FileTransferCode_Offline
 	}
-	return
 }
 
-type FileTransferLocalNatFailed struct {
-	From int64  `json:"fr"`
-	To   int64  `json:"to"`
-	Fid  string `json:"fid"`
-	Path string `json:"p"`
+type FileTransferLocalNatFailedReqPkt struct {
+	From         int64  `json:"fr"`
+	To           int64  `json:"to"`
+	FromTerminal int16  `json:"ft,omitempty"`
+	ToTerminal   int16  `json:"tt,omitempty"`
+	SessionId    string `json:"sid"`
 }
 
-type FileTransferLocalNatResPkt struct {
-	Code int8 `json:"code"`
+type FileTransferLocalNatFailedResPkt struct {
+	SessionId string `json:"sid"`
+	Code      int8   `json:"code"`
 }
 
 type FileTransferLocalNATFailedHandler struct {
 	CmdHandler
 }
 
-func (h *FileTransferLocalNATFailedHandler) initHandler(CmdHandlers *CmdHandlers) {
-	h.Cmd = Cmd_FileTransferDirectLocalConnectFailed
-	CmdHandlers.handlers[h.Cmd] = h
+func (h *FileTransferLocalNATFailedHandler) initHandler(cmdHandlers *CmdHandlers) {
+	h.Cmd = Cmd_FileTransferLocalNATFailed
+	cmdHandlers.handlers[Cmd_FileTransferStartLanNat] = h
 }
 
 func (h *FileTransferLocalNATFailedHandler) packetIn(pkt connections.Packet) {
-	var resPkt FileTransferLocalNatResPkt
+	var resPkt FileTransferLocalNatFailedResPkt
 	resPkt.Code = FileTransferCode_None
 	defer func() {
 		resData, err := json.Marshal(resPkt)
@@ -222,19 +260,24 @@ func (h *FileTransferLocalNATFailedHandler) packetIn(pkt connections.Packet) {
 			return
 		}
 	}()
-	var reqPkt FileTransferLocalNatFailed
+	var reqPkt FileTransferLocalNatFailedReqPkt
 	err := json.Unmarshal(pkt.Data, &reqPkt)
 	if err != nil {
 		logs.Logger.Warn("json unmarshal error:", err, " user:", pkt.Conn.AuthInfo.Account, " addr:", pkt.Conn.RemoteAddr(), "reqpkt :", string(pkt.Data))
 		return
 	}
+	resPkt.SessionId = reqPkt.SessionId
+
 	toPresence := connections.FindPresences(reqPkt.To)
 	online := toPresence != nil
-	for _, conn := range toPresence.Terminals {
-		conn.WritePacket(Cmd_FileTransferRequest, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), pkt.Data)
+	for terminalType, conn := range toPresence.Terminals {
+		if terminalType == reqPkt.ToTerminal {
+			online = true
+			conn.WritePacket(Cmd_FileTransferRequest, connections.Pkt_Type_Request, 0, uint16(rand.Intn(0xFFFF)), pkt.Data)
+		}
 	}
 	if !online {
+		logs.Logger.Infof("PC User %lld is not online", reqPkt.To)
 		resPkt.Code = FileTransferCode_Offline
 	}
-	return
 }
