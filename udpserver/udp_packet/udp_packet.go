@@ -47,7 +47,7 @@ func Parse(addr *net.UDPAddr, data []byte) {
 	stPkt.DataLength = (int64)(data[7] << 8)
 	stPkt.DataLength = (int64)(data[8])
 
-	stPkt.JsonData = data[9:stPkt.JsonLength]
+	stPkt.JsonData = data[9 : stPkt.JsonLength+9]
 	stPkt.Data = data[9+stPkt.JsonLength:]
 	handlePacket(stPkt)
 }

@@ -10,12 +10,13 @@ import (
 )
 
 const (
-	MIT_None      int16 = iota
-	MIT_Text            //"t"
-	MIT_Image           //"i"
-	MIT_Emoticons       //"e"
-	MIT_Voice           //"v"
-	MIT_Gif             //"g"
+	MIT_None        int16 = iota
+	MIT_Text              //"t"
+	MIT_Image             //"i"
+	MIT_Emoticons         //"e"
+	MIT_Voice             //"v"
+	MIT_Gif               //"g"
+	MIT_OfflineFile       //"of"
 )
 
 type MessageItem struct {

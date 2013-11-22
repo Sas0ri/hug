@@ -90,6 +90,10 @@ const (
 	Cmd_FileTransferStartLanNat
 	Cmd_FileTransferLocalNATFailed
 	Cmd_FileTransferStartWanNat
+	Cmd_FileTransferLinkServer
+	Cmd_FileTransferNATShake
+	Cmd_FileTransferStartSend
+	Cmd_FileTransferGetFile
 )
 
 type IHandler interface {

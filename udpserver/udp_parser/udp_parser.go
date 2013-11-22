@@ -63,7 +63,7 @@ func readPacket(data []byte) (pkt *UDPPacket) {
 	pkt.Length += (uint32)(data[6] << 16)
 	pkt.Length += (uint32)(data[7] << 8)
 	pkt.Length += (uint32)(data[8])
-	pkt.Data = data[9:pkt.Length]
+	pkt.Data = data[9 : pkt.Length+9]
 	pkt.CheckSum = data[len(pkt.Data)+9:]
 	return
 }

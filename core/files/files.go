@@ -3,12 +3,13 @@ package files
 import (
 	"fmt"
 	"github.com/lxn/go-pgsql"
+	"hug/core/users"
 	"hug/logs"
 	"time"
 )
 
 const createFileTableSql = `
-CREATE TABLE IF NOT EXISTS file
+CREATE TABLE IF NOT EXISTS files
 		(
 		  fid serial NOT NULL unique,
 		  uid bigint NOT NULL,
@@ -32,8 +33,9 @@ func CreateFile(uid int64, name string, path string) {
 		`
 
 	fid := 0
-	if uid <= 0 {
-		logs.Logger.Critical(fmt.Sprintln("offline file uid =", uid))
+	exitst, _ := users.IsUidExist(uid)
+	if !exitst {
+		logs.Logger.Warnf("offline file uid not exist uid =%v", uid)
 		return
 	}
 	if len(name) == 0 {

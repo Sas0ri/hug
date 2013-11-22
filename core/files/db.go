@@ -12,37 +12,37 @@ import (
 var pool *pgsql.Pool
 
 func ConnDB(cfg *config.Config) (err error) {
-	dbName, err := cfg.GetString("db_file_name")
+	dbName, err := cfg.GetString("db_files_name")
 	if err != nil {
 		logs.Logger.Critical("load db name from config error: ", err)
 		os.Exit(300)
 		return
 	}
-	user, err := cfg.GetString("db_file_user")
+	user, err := cfg.GetString("db_files_user")
 	if err != nil {
 		logs.Logger.Critical("load user from config error: ", err)
 		os.Exit(300)
 		return
 	}
-	password, err := cfg.GetString("db_file_password")
+	password, err := cfg.GetString("db_files_password")
 	if err != nil {
 		logs.Logger.Critical("load password from config error: ", err)
 		os.Exit(300)
 		return
 	}
-	minConns, err := cfg.GetInt("db_file_min_conns")
+	minConns, err := cfg.GetInt("db_files_min_conns")
 	if err != nil {
 		logs.Logger.Critical("load min conns from config error: ", err)
 		os.Exit(300)
 		return
 	}
-	maxConns, err := cfg.GetInt("db_file_max_conns")
+	maxConns, err := cfg.GetInt("db_files_max_conns")
 	if err != nil {
 		logs.Logger.Critical("load max conns from config error: ", err)
 		os.Exit(300)
 		return
 	}
-	idleTimeout, err := cfg.GetInt("db_file_idle_timeout")
+	idleTimeout, err := cfg.GetInt("db_files_idle_timeout")
 	if err != nil {
 		logs.Logger.Critical("load idle timeout from config error: ", err)
 		os.Exit(300)
