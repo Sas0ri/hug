@@ -31,7 +31,7 @@ func startListenUdpPort() {
 		Port: UdpPort,
 	})
 	if err != nil {
-		logs.Logger.Info("Listen UDP failed:", err)
+		logs.Logger.Critical("Listen UDP failed:", err)
 		return
 	}
 	defer socket.Close()
@@ -44,7 +44,7 @@ func startListenUdpPort() {
 		data := make([]byte, 4096)
 		len, remoteAddr, err := socket.ReadFromUDP(data)
 		if err != nil {
-			logs.Logger.Info("read udp failed!", err)
+			logs.Logger.Critical("read udp failed!", err)
 			continue
 		}
 		go rp.Repack(remoteAddr, data[:len])

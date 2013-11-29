@@ -23,9 +23,10 @@ func main() {
 	webserver.Start()
 	defer webserver.Stop()
 
+	udpserver.Start()
+	defer udpserver.Stop()
+
 	imserver.Start()
 	defer imserver.Stop()
 
-	udpserver.Start()
-	defer udpserver.Stop()
 }

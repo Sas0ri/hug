@@ -2,6 +2,7 @@ package udp_parser
 
 import (
 	"hash/crc32"
+	"hug/imserver/connections"
 	"hug/udpserver/udp_packet"
 	"net"
 )
@@ -32,6 +33,7 @@ func Init(conn *net.UDPConn) {
 }
 
 func Parse(addr *net.UDPAddr, data []byte) {
+	data = unescape(data)
 	length := len(data)
 	if length < 13 {
 		return
@@ -68,6 +70,28 @@ func readPacket(data []byte) (pkt *UDPPacket) {
 	return
 }
 
+func unescape(data []byte) (buf []byte) {
+	len := len(data)
+	buf = []byte{}
+	for i := 0; i < len; i++ {
+		if data[i] != connections.Pkt_DLE {
+			buf = append(buf, data[i])
+		}
+	}
+	return
+}
+
+func escape(data []byte) (buf []byte) {
+	buf = []byte{}
+	for i := 0; i < len(data); i++ {
+		if data[i] == connections.Pkt_STX || data[i] == connections.Pkt_ETX || data[i] == connections.Pkt_DLE {
+			buf = append(buf, connections.Pkt_DLE)
+		}
+		buf = append(buf, data[i])
+	}
+	return
+}
+
 func writePacket(addr *net.UDPAddr, pkt *UDPPacket) {
 	data := []byte{}
 	data = append(data, byte(pkt.D>>24))
@@ -86,6 +110,8 @@ func writePacket(addr *net.UDPAddr, pkt *UDPPacket) {
 	data = append(data, byte(checkSum>>16))
 	data = append(data, byte(checkSum>>8))
 	data = append(data, byte(checkSum))
+	data = escape(data)
+
 	WriteUDP(addr, data)
 }
 
